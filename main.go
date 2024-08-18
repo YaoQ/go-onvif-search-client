@@ -42,8 +42,9 @@ func main() {
 	})
 	ifaceSelect.SetSelected(ifaces[0].Name)
 
+	// 设置表格
 	deviceList := widget.NewTable(
-		func() (int, int) { return 9, 4 }, // 预留8行空白信息
+		func() (int, int) { return 9, 4 }, // 初始化为9行4列
 		func() fyne.CanvasObject {
 			return widget.NewLabel("template")
 		},
@@ -81,6 +82,12 @@ func main() {
 		}
 	}
 
+	// 创建滚动容器包裹表格
+	scrollContainer := container.NewVScroll(deviceList)
+
+	// 设置默认最小尺寸，允许显示至少8行内容
+	scrollContainer.SetMinSize(fyne.NewSize(0, 240)) // 每行高度为30像素，8行 = 240px
+
 	searchBtn := widget.NewButton("搜索设备", func() {
 		ifaceName := ifaceSelect.Selected
 		log.Println("开始搜索设备...")
@@ -90,13 +97,21 @@ func main() {
 			return
 		}
 		log.Println("搜索设备成功，找到", len(devices), "个设备")
-		deviceList.Length = func() (int, int) { return len(devices) + 1, 4 }
+
+		// 保证最少显示8行
+		totalRows := len(devices) + 1
+		if totalRows < 9 {
+			totalRows = 9
+		}
+
+		deviceList.Length = func() (int, int) { return totalRows, 4 }
 		deviceList.UpdateCell = func(id widget.TableCellID, cell fyne.CanvasObject) {
 			if id.Row == 0 {
 				// 表头
 				headers := []string{"ID", "设备名称", "IP", "端口"}
 				cell.(*widget.Label).SetText(headers[id.Col])
-			} else {
+			} else if id.Row-1 < len(devices) {
+				// 有设备信息的行
 				device := devices[id.Row-1]
 				switch id.Col {
 				case 0:
@@ -108,20 +123,37 @@ func main() {
 				case 3:
 					cell.(*widget.Label).SetText(fmt.Sprintf("%d", device.Port))
 				}
+			} else {
+				// 填充空白行
+				switch id.Col {
+				case 0:
+					cell.(*widget.Label).SetText(fmt.Sprintf("%d", id.Row))
+				case 1:
+					cell.(*widget.Label).SetText("")
+				case 2:
+					cell.(*widget.Label).SetText("")
+				case 3:
+					cell.(*widget.Label).SetText("")
+				}
 			}
 		}
 		deviceList.Refresh()
+
+		// 动态设置滚动容器的最小高度以适应表格内容
+		rowHeight := float32(30) // 每行高度为30像素
+		scrollContainer.SetMinSize(fyne.NewSize(0, rowHeight*float32(totalRows)))
 	})
 
-	// 布局UI
-	w.SetContent(container.NewVBox(
+	// 布局UI，并使表格占据适当的空间
+	layout := container.NewVBox(
 		widget.NewLabel("选择网络接口:"),
 		ifaceSelect,
 		searchBtn,
 		widget.NewLabel("设备列表:"),
-		deviceList,
-	))
+		scrollContainer, // 使用滚动容器以显示完整表格
+	)
 
+	w.SetContent(layout)
 	w.ShowAndRun()
 }
 
